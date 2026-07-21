@@ -702,8 +702,9 @@ class ShoruikoApp(tk.Tk):
     # ── File browsing ──
 
     def _browse_file(self):
+        # Opens in home directory — Desktop, Documents, Downloads all visible from here
         path = filedialog.askopenfilename(
-            title="Open document",
+            title="Open document — browse anywhere",
             initialdir=os.path.expanduser("~"),
             filetypes=SUPPORTED_EXTENSIONS,
         )
