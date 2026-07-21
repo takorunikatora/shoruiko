@@ -14,6 +14,7 @@ Architecture:
 
 from __future__ import annotations
 
+import os
 import re
 from dataclasses import dataclass, field
 from typing import Callable
@@ -857,7 +858,3 @@ def _extract_html(path: str) -> str:
     extractor = _HTMLTextExtractor()
     extractor.feed(html_text)
     return extractor.get_text()
-
-
-# Late import for os (avoid circular at module level; only used at runtime)
-import os

@@ -326,11 +326,39 @@ class PillToolbar(tk.Frame):
     def mode(self) -> Mode:
         """Resolve category + intensity override into a concrete Mode."""
         if self._category == "academic":
-            return mode_academic()
+            m = mode_academic()
         elif self._category == "publisher":
-            return mode_publisher()
+            m = mode_publisher()
         else:
-            return mode_creator()
+            m = mode_creator()
+
+        if self._intensity == "light":
+            # Strip to Phase 1 only — line-level removals + whitespace
+            m.substitute_filler = False
+            m.substitute_hedging = False
+            m.substitute_copula = False
+            m.substitute_formal_linking = False
+            m.rewrite_rule_of_three = False
+            m.rewrite_contrasts = False
+            m.rewrite_overstructuring = False
+            m.vocabulary_swap = False
+            m.normalize_em_dashes = False
+            m.normalize_passive_voice = False
+            m.aggressive = False
+        elif self._intensity == "aggressive":
+            # Enable every phase on top of the category preset
+            m.substitute_hedging = True
+            m.substitute_copula = True
+            m.substitute_formal_linking = True
+            m.rewrite_rule_of_three = True
+            m.rewrite_contrasts = True
+            m.rewrite_overstructuring = True
+            m.vocabulary_swap = True
+            m.normalize_em_dashes = True
+            m.normalize_passive_voice = True
+            m.aggressive = True
+
+        return m
 
     @property
     def category_name(self) -> str:
@@ -339,7 +367,8 @@ class PillToolbar(tk.Frame):
 
     @property
     def _parent(self):
-        return self.master
+        """Traverse up from toolbar_frame to the ShoruikoApp root."""
+        return self.master.master
 
 
 # ═══════════════════════════════════════════════════════════════════════════
