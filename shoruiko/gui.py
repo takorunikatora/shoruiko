@@ -775,17 +775,26 @@ class ShoruikoApp(tk.Tk):
 
         self._toolbar.start_scan()
         src_label = (f"  ({os.path.basename(self._current_file)})"
-                     if self._current_file else "")
+                     if self._current_file else "  (pasted text)")
         self._status_label.configure(
             text=f"Processing{src_label}...", fg=YELLOW)
 
         def _run():
-            result, stats = shoruiko(text, self._toolbar.mode)
-            self._last_result = result
-            self._last_stats = stats
-            self.after(0, self._show_result, result, stats)
+            try:
+                result, stats = shoruiko(text, self._toolbar.mode)
+                self._last_result = result
+                self._last_stats = stats
+                self.after(0, self._show_result, result, stats)
+            except Exception as exc:
+                self.after(0, self._show_error, str(exc))
 
         threading.Thread(target=_run, daemon=True).start()
+
+    def _show_error(self, msg: str):
+        self._toolbar.stop_scan()
+        self._status_label.configure(
+            text=f"✗ Error: {msg[:60]}", fg=RED)
+        messagebox.showerror("Processing Error", msg)
 
     def _show_result(self, result: str, stats: Stats):
         self._output.delete("1.0", "end")
