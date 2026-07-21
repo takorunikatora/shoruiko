@@ -517,6 +517,7 @@ class ShoruikoApp(tk.Tk):
         self.bind("<Control-2>", lambda e: self._toolbar._select_category("creator"))
         self.bind("<Control-3>", lambda e: self._toolbar._select_category("publisher"))
         self.bind("<Control-o>", lambda e: self._browse_file())
+        self.bind("<Control-v>", lambda e: self._paste_clipboard())  # Ctrl+V (no shift) when focused on root
         self.bind("<Escape>", lambda e: self.destroy())
 
     def _build_ui(self):
@@ -592,6 +593,18 @@ class ShoruikoApp(tk.Tk):
             lambda e: browse_btn.configure(bg="#252060"))
         browse_btn.bind("<Leave>",
             lambda e: browse_btn.configure(bg="#151535"))
+
+        # Paste button
+        paste_btn = tk.Label(
+            input_header, text="📋 Paste", fg=PURPLE_GLOW, bg="#151535",
+            font=FONT_SMALL, padx=10, pady=1, cursor="hand2",
+        )
+        paste_btn.pack(side="right", padx=(0, 4), pady=2)
+        paste_btn.bind("<Button-1>", lambda e: self._paste_clipboard())
+        paste_btn.bind("<Enter>",
+            lambda e: paste_btn.configure(bg="#252060"))
+        paste_btn.bind("<Leave>",
+            lambda e: paste_btn.configure(bg="#151535"))
 
         tk.Label(
             input_header, text="paste or browse a document",
@@ -714,6 +727,30 @@ class ShoruikoApp(tk.Tk):
             "Load Error",
             f"Could not read {fname}:\n\n{exc}",
         )
+
+    def _paste_clipboard(self):
+        """Paste text from clipboard into the input area."""
+        try:
+            text = self.clipboard_get()
+        except Exception:
+            self._status_label.configure(
+                text="✗ Clipboard is empty or inaccessible", fg=RED)
+            return
+
+        if not text.strip():
+            self._status_label.configure(
+                text="✗ Clipboard is empty", fg=YELLOW)
+            return
+
+        self._current_file = None
+        self._file_label.configure(text="📋 clipboard")
+        self._input.delete("1.0", "end")
+        self._input.insert("1.0", text)
+        self._status_label.configure(
+            text=f"📋 Pasted from clipboard ({len(text):,} chars)",
+            fg=BLUE_GLOW,
+        )
+        self._update_char_count()
 
     # ── Actions ──
 
