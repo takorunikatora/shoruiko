@@ -4,7 +4,7 @@ Design language:
   - Liquid glass: semi-transparent cards with subtle border glow
   - Bento grid: modular rounded-rect content blocks
   - Center-floating pill toolbar: mode selector + action buttons
-  - Colors: blue (#4055ff), green (#22dd55), and purple (#8855ff) neon on dark navy (#08080f)
+  - Colors: blue (#4055ff), green (#22dd55), and purple (#8855ff) neon on deep purple (#050018)
 """
 
 from __future__ import annotations
@@ -32,10 +32,10 @@ from shoruiko.core import (
 # Color palette — blue & purple neon on dark navy
 # ═══════════════════════════════════════════════════════════════════════════
 
-BG = "#08080f"
-CARD_BG = "#0d0d1a"
-CARD_BORDER = "#1a1a33"
-INPUT_BG = "#0a0a14"
+BG = "#050018"
+CARD_BG = "#0a0030"
+CARD_BORDER = "#200060"
+INPUT_BG = "#030010"
 TEXT = "#99bbff"
 TEXT_MUTED = "#7766cc"
 BLUE = "#4055ff"
@@ -48,12 +48,12 @@ GREEN = "#22dd55"
 RED = "#ff4055"
 ORANGE = "#ff6622"
 YELLOW = "#ffbb22"
-TOOLBAR_BG = "#12122a"
-TOOLBAR_BORDER = "#252550"
-PILL_BG = "#1a1a38"
-PILL_ACTIVE = "#252548"
-PILL_BORDER = "#3a3a60"
-HIGHLIGHT_BG = "#101030"
+TOOLBAR_BG = "#0f0038"
+TOOLBAR_BORDER = "#300070"
+PILL_BG = "#180048"
+PILL_ACTIVE = "#280068"
+PILL_BORDER = "#3a0080"
+HIGHLIGHT_BG = "#100040"
 
 FONT_TITLE = ("Inter", 13, "bold")
 FONT_HEADING = ("Inter", 11, "bold")
@@ -92,11 +92,11 @@ class GlassCard(tk.Frame):
         self._win_id = None
 
         if title:
-            self._header = tk.Frame(self.inner, bg="#10102a", height=28)
+            self._header = tk.Frame(self.inner, bg="#080030", height=28)
             self._header.pack(fill="x", side="top")
             self._header.pack_propagate(False)
             tk.Label(
-                self._header, text=title, fg=BLUE_GLOW, bg="#10102a",
+                self._header, text=title, fg=BLUE_GLOW, bg="#080030",
                 font=FONT_HEADING, anchor="w",
             ).pack(side="left", padx=12, pady=2)
 
@@ -179,7 +179,7 @@ class PillToolbar(tk.Frame):
             pill.pack(side="left", padx=2, pady=6)
             pill.bind("<Button-1>", lambda e, c=cat_key: self._select_category(c))
             pill.bind("<Enter>",
-                lambda e, p=pill: p.configure(bg="#202048"))
+                lambda e, p=pill: p.configure(bg="#300068"))
             pill.bind("<Leave>",
                 lambda e, p=pill, c=cat_key:
                     p.configure(bg=PILL_ACTIVE if self._category == c else PILL_BG))
@@ -224,7 +224,7 @@ class PillToolbar(tk.Frame):
         self._scan_btn.pack(side="left", padx=2, pady=6)
         self._scan_btn.bind("<Button-1>", lambda e: self._on_scan())
         self._scan_btn.bind("<Enter>",
-            lambda e: self._scan_btn.configure(bg="#103020"))
+            lambda e: self._scan_btn.configure(bg="#003018"))
         self._scan_btn.bind("<Leave>",
             lambda e: self._scan_btn.configure(bg=PILL_BG))
 
@@ -251,7 +251,7 @@ class PillToolbar(tk.Frame):
         )
         copy_btn.pack(side="left", padx=2, pady=6)
         copy_btn.bind("<Button-1>", lambda e: self._copy())
-        copy_btn.bind("<Enter>", lambda e: copy_btn.configure(bg="#10102a"))
+        copy_btn.bind("<Enter>", lambda e: copy_btn.configure(bg="#080030"))
         copy_btn.bind("<Leave>", lambda e: copy_btn.configure(bg=PILL_BG))
 
         # Center and draw pill background
@@ -384,16 +384,16 @@ class StatsPanel(tk.Frame):
         self._build()
 
     def _build(self):
-        header = tk.Frame(self, bg="#10102a", height=24)
+        header = tk.Frame(self, bg="#080030", height=24)
         header.pack(fill="x")
         header.pack_propagate(False)
         tk.Label(
-            header, text="Scan Results", fg=PURPLE_GLOW, bg="#10102a",
+            header, text="Scan Results", fg=PURPLE_GLOW, bg="#080030",
             font=FONT_SMALL, anchor="w",
         ).pack(side="left", padx=8, pady=3)
 
         self._summary = tk.Label(
-            header, text="Ready", fg=TEXT_MUTED, bg="#10102a",
+            header, text="Ready", fg=TEXT_MUTED, bg="#080030",
             font=FONT_SMALL, anchor="e",
         )
         self._summary.pack(side="right", padx=8, pady=3)
@@ -474,11 +474,11 @@ class PatternsPanel(tk.Frame):
         self._build()
 
     def _build(self):
-        header = tk.Frame(self, bg="#10102a", height=24)
+        header = tk.Frame(self, bg="#080030", height=24)
         header.pack(fill="x")
         header.pack_propagate(False)
         tk.Label(
-            header, text="Pattern Filters", fg=BLUE_GLOW, bg="#10102a",
+            header, text="Pattern Filters", fg=BLUE_GLOW, bg="#080030",
             font=FONT_SMALL, anchor="w",
         ).pack(side="left", padx=8, pady=3)
 
@@ -597,53 +597,53 @@ class ShoruikoApp(tk.Tk):
                               highlightbackground=CARD_BORDER)
         input_card.grid(row=0, column=0, sticky="nsew")
 
-        input_header = tk.Frame(input_card, bg="#10102a", height=28)
+        input_header = tk.Frame(input_card, bg="#080030", height=28)
         input_header.pack(fill="x")
         input_header.pack_propagate(False)
         tk.Label(
-            input_header, text="Input Text", fg=BLUE_GLOW, bg="#10102a",
+            input_header, text="Input Text", fg=BLUE_GLOW, bg="#080030",
             font=FONT_HEADING, anchor="w",
         ).pack(side="left", padx=12, pady=2)
 
         # Browse button
         self._file_label = tk.Label(
-            input_header, text="", fg=PURPLE_GLOW, bg="#10102a",
+            input_header, text="", fg=PURPLE_GLOW, bg="#080030",
             font=FONT_SMALL,
         )
         self._file_label.pack(side="right", padx=(0, 6), pady=2)
 
         browse_btn = tk.Label(
-            input_header, text="📂 Browse", fg=PURPLE_GLOW, bg="#151535",
+            input_header, text="📂 Browse", fg=PURPLE_GLOW, bg="#180048",
             font=FONT_SMALL, padx=10, pady=1, cursor="hand2",
         )
         browse_btn.pack(side="right", padx=(0, 4), pady=2)
         browse_btn.bind("<Button-1>", lambda e: self._browse_file())
         browse_btn.bind("<Enter>",
-            lambda e: browse_btn.configure(bg="#252060"))
+            lambda e: browse_btn.configure(bg="#300070"))
         browse_btn.bind("<Leave>",
-            lambda e: browse_btn.configure(bg="#151535"))
+            lambda e: browse_btn.configure(bg="#180048"))
 
         # Paste button
         paste_btn = tk.Label(
-            input_header, text="📋 Paste", fg=PURPLE_GLOW, bg="#151535",
+            input_header, text="📋 Paste", fg=PURPLE_GLOW, bg="#180048",
             font=FONT_SMALL, padx=10, pady=1, cursor="hand2",
         )
         paste_btn.pack(side="right", padx=(0, 4), pady=2)
         paste_btn.bind("<Button-1>", lambda e: self._paste_clipboard())
         paste_btn.bind("<Enter>",
-            lambda e: paste_btn.configure(bg="#252060"))
+            lambda e: paste_btn.configure(bg="#300070"))
         paste_btn.bind("<Leave>",
-            lambda e: paste_btn.configure(bg="#151535"))
+            lambda e: paste_btn.configure(bg="#180048"))
 
         tk.Label(
             input_header, text="paste or browse a document",
-            fg=TEXT_MUTED, bg="#10102a", font=FONT_SMALL,
+            fg=TEXT_MUTED, bg="#080030", font=FONT_SMALL,
         ).pack(side="right", padx=12, pady=2)
 
         self._input = scrolledtext.ScrolledText(
             input_card, bg=INPUT_BG, fg=TEXT, insertbackground=BLUE,
             font=FONT_BODY, wrap="word", relief="flat", bd=0,
-            padx=12, pady=10, selectbackground="#202060",
+            padx=12, pady=10, selectbackground="#280070",
         )
         self._input.pack(fill="both", expand=True)
         self._input.bind("<Control-v>",
@@ -673,16 +673,16 @@ class ShoruikoApp(tk.Tk):
         output_card.grid(row=1, column=0, columnspan=2,
                          sticky="nsew", pady=(6, 0))
 
-        output_header = tk.Frame(output_card, bg="#10102a", height=28)
+        output_header = tk.Frame(output_card, bg="#080030", height=28)
         output_header.pack(fill="x")
         output_header.pack_propagate(False)
         tk.Label(
-            output_header, text="Output", fg=GREEN, bg="#10102a",
+            output_header, text="Output", fg=GREEN, bg="#080030",
             font=FONT_HEADING, anchor="w",
         ).pack(side="left", padx=12, pady=2)
 
         self._char_count_label = tk.Label(
-            output_header, text="", fg=TEXT_MUTED, bg="#10102a",
+            output_header, text="", fg=TEXT_MUTED, bg="#080030",
             font=FONT_SMALL,
         )
         self._char_count_label.pack(side="right", padx=12, pady=2)
@@ -690,7 +690,7 @@ class ShoruikoApp(tk.Tk):
         self._output = scrolledtext.ScrolledText(
             output_card, bg=INPUT_BG, fg=TEXT, insertbackground=BLUE,
             font=FONT_BODY, wrap="word", relief="flat", bd=0,
-            padx=12, pady=10, selectbackground="#202060",
+            padx=12, pady=10, selectbackground="#280070",
         )
         self._output.pack(fill="both", expand=True)
 
