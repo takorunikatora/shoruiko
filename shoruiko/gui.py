@@ -34,7 +34,7 @@ from shoruiko.core import (
 
 BG = "#050018"
 CARD_BG = "#0a0030"
-CARD_BORDER = "#200060"
+CARD_BORDER = "#4400aa"
 INPUT_BG = "#030010"
 TEXT = "#99bbff"
 TEXT_MUTED = "#7766cc"
@@ -49,10 +49,10 @@ RED = "#ff4055"
 ORANGE = "#ff6622"
 YELLOW = "#ffbb22"
 TOOLBAR_BG = "#0f0038"
-TOOLBAR_BORDER = "#300070"
+TOOLBAR_BORDER = "#5500cc"
 PILL_BG = "#180048"
 PILL_ACTIVE = "#280068"
-PILL_BORDER = "#3a0080"
+PILL_BORDER = "#5500cc"
 HIGHLIGHT_BG = "#100040"
 
 FONT_TITLE = ("Inter", 13, "bold")
@@ -521,9 +521,21 @@ class ShoruikoApp(tk.Tk):
     def __init__(self):
         super().__init__()
         self.title("shoruiko")
-        self.configure(bg=BG)
+        self.configure(bg=BG, highlightthickness=0, highlightbackground=BG, bd=0)
         self.geometry("1100x750")
         self.minsize(800, 500)
+
+        # ── Nuke system scrollbar theme colours ──
+        style = ttk.Style()
+        style.theme_use("clam")  # clam is the most styleable on Linux
+        style.configure("TScrollbar",
+            background=BG, troughcolor=BG,
+            bordercolor=BG, arrowcolor=PURPLE_GLOW,
+            darkcolor=BG, lightcolor=BG,
+        )
+        style.map("TScrollbar",
+            background=[("active", PURPLE_DIM)],
+        )
 
         try:
             self.attributes("-alpha", 0.97)
@@ -619,7 +631,7 @@ class ShoruikoApp(tk.Tk):
         browse_btn.pack(side="right", padx=(0, 4), pady=2)
         browse_btn.bind("<Button-1>", lambda e: self._browse_file())
         browse_btn.bind("<Enter>",
-            lambda e: browse_btn.configure(bg="#300070"))
+            lambda e: browse_btn.configure(bg="#4400aa"))
         browse_btn.bind("<Leave>",
             lambda e: browse_btn.configure(bg="#180048"))
 
@@ -631,7 +643,7 @@ class ShoruikoApp(tk.Tk):
         paste_btn.pack(side="right", padx=(0, 4), pady=2)
         paste_btn.bind("<Button-1>", lambda e: self._paste_clipboard())
         paste_btn.bind("<Enter>",
-            lambda e: paste_btn.configure(bg="#300070"))
+            lambda e: paste_btn.configure(bg="#4400aa"))
         paste_btn.bind("<Leave>",
             lambda e: paste_btn.configure(bg="#180048"))
 
@@ -644,8 +656,17 @@ class ShoruikoApp(tk.Tk):
             input_card, bg=INPUT_BG, fg=TEXT, insertbackground=BLUE,
             font=FONT_BODY, wrap="word", relief="flat", bd=0,
             padx=12, pady=10, selectbackground="#280070",
+            selectforeground=TEXT, highlightthickness=0,
         )
         self._input.pack(fill="both", expand=True)
+        self._input.configure(highlightbackground=BG, highlightcolor=BG)
+
+        # Replace ScrolledText's classic scrollbar with a themed ttk one
+        self._input.vbar.destroy()
+        self._input.vbar = ttk.Scrollbar(
+            input_card, orient="vertical", command=self._input.yview)
+        self._input.configure(yscrollcommand=self._input.vbar.set)
+        self._input.vbar.pack(side="right", fill="y")
         self._input.bind("<Control-v>",
             lambda e: self.after(100, self._update_char_count))
         self._input.bind("<KeyRelease>",
@@ -691,8 +712,17 @@ class ShoruikoApp(tk.Tk):
             output_card, bg=INPUT_BG, fg=TEXT, insertbackground=BLUE,
             font=FONT_BODY, wrap="word", relief="flat", bd=0,
             padx=12, pady=10, selectbackground="#280070",
+            selectforeground=TEXT, highlightthickness=0,
         )
         self._output.pack(fill="both", expand=True)
+        self._output.configure(highlightbackground=BG, highlightcolor=BG)
+
+        # Replace ScrolledText's classic scrollbar with a themed ttk one
+        self._output.vbar.destroy()
+        self._output.vbar = ttk.Scrollbar(
+            output_card, orient="vertical", command=self._output.yview)
+        self._output.configure(yscrollcommand=self._output.vbar.set)
+        self._output.vbar.pack(side="right", fill="y")
 
         # ── Pill toolbar (floating at bottom) ──
         toolbar_frame = tk.Frame(self, bg=BG, height=50)
