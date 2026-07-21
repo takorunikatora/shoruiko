@@ -13,6 +13,9 @@ from shoruiko.core import (
     mode_light,
     mode_medium,
     mode_aggressive,
+    mode_academic,
+    mode_creator,
+    mode_publisher,
     Mode,
     Stats,
 )

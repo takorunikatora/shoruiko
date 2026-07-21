@@ -15,6 +15,9 @@ from shoruiko.core import (
     mode_light,
     mode_medium,
     mode_aggressive,
+    mode_academic,
+    mode_creator,
+    mode_publisher,
     shoruiko,
     shoruiko_file,
     Stats,
@@ -28,7 +31,16 @@ app = typer.Typer(
 console = Console()
 
 
-def _pick_mode(light: bool, aggressive: bool) -> Mode:
+CATEGORY_MODES = {
+    "academic": mode_academic,
+    "creator": mode_creator,
+    "publisher": mode_publisher,
+}
+
+
+def _pick_mode(light: bool, aggressive: bool, category: str | None = None) -> Mode:
+    if category and category in CATEGORY_MODES:
+        return CATEGORY_MODES[category]()
     if aggressive:
         return mode_aggressive()
     if light:
@@ -87,10 +99,19 @@ def _render_stats(stats: Stats) -> None:
 
 @app.command()
 def file(
-    path: str = typer.Argument(..., help="Path to a text file"),
+    path: str = typer.Argument(..., help="Path to a document (txt, pdf, docx, html, md)"),
     light: bool = typer.Option(False, "--light", "-l", help="Whitespace only"),
     aggressive: bool = typer.Option(
         False, "--aggressive", "-a", help="Deep de-AI-fication"
+    ),
+    academic: bool = typer.Option(
+        False, "--academic", help="Academic preset — conservative, keeps formal tone"
+    ),
+    creator: bool = typer.Option(
+        False, "--creator", help="Creator preset — balanced for blogs/newsletters"
+    ),
+    publisher: bool = typer.Option(
+        False, "--publisher", help="Publisher preset — maximum de-AI for SEO"
     ),
     write: bool = typer.Option(
         False, "--write", "-w", help="Overwrite file in place"
@@ -99,8 +120,17 @@ def file(
         False, "--stats", "-s", help="Show only statistics, not output"
     ),
 ):
-    """Process a single prose file."""
-    mode = _pick_mode(light, aggressive)
+    """Process a single document."""
+    # Resolve category → mode
+    category = None
+    if academic:
+        category = "academic"
+    elif creator:
+        category = "creator"
+    elif publisher:
+        category = "publisher"
+
+    mode = _pick_mode(light, aggressive, category)
     fpath = Path(path).resolve()
 
     if not fpath.exists():

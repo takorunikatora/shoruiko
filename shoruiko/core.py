@@ -80,6 +80,76 @@ def mode_aggressive() -> Mode:
     )
 
 
+def mode_academic() -> Mode:
+    """Essays, papers, theses — conservative. Removes obvious AI fingerprints
+    while preserving formal academic tone, hedging, and structure."""
+    return Mode(
+        remove_chatbot_artifacts=True,
+        remove_sycophantic=True,
+        remove_disclaimers=True,
+        remove_generic_endings=True,
+        remove_sign_offs=True,
+        substitute_filler=True,
+        substitute_hedging=False,         # academic hedging is normal
+        substitute_copula=False,
+        substitute_formal_linking=False,
+        rewrite_rule_of_three=False,
+        rewrite_contrasts=False,
+        rewrite_overstructuring=False,
+        vocabulary_swap=False,            # keep academic vocabulary
+        normalize_em_dashes=False,
+        normalize_passive_voice=False,    # passive voice is standard
+        normalize_whitespace=True,
+    )
+
+
+def mode_creator() -> Mode:
+    """Blog posts, newsletters, social media — balanced. Strips AI tics
+    while preserving authentic voice and personality."""
+    return Mode(
+        remove_chatbot_artifacts=True,
+        remove_sycophantic=True,
+        remove_disclaimers=True,
+        remove_generic_endings=True,
+        remove_sign_offs=True,
+        substitute_filler=True,
+        substitute_hedging=True,
+        substitute_copula=True,
+        substitute_formal_linking=True,
+        rewrite_rule_of_three=False,
+        rewrite_contrasts=False,
+        rewrite_overstructuring=False,
+        vocabulary_swap=True,
+        normalize_em_dashes=True,
+        normalize_passive_voice=False,
+        normalize_whitespace=True,
+    )
+
+
+def mode_publisher() -> Mode:
+    """SEO articles, web copy, commercial content — maximum de-AI-fication.
+    Every pattern category is active for the lowest possible AI detection score."""
+    return Mode(
+        remove_chatbot_artifacts=True,
+        remove_sycophantic=True,
+        remove_disclaimers=True,
+        remove_generic_endings=True,
+        remove_sign_offs=True,
+        substitute_filler=True,
+        substitute_hedging=True,
+        substitute_copula=True,
+        substitute_formal_linking=True,
+        rewrite_rule_of_three=True,
+        rewrite_contrasts=True,
+        rewrite_overstructuring=True,
+        vocabulary_swap=True,
+        normalize_em_dashes=True,
+        normalize_passive_voice=True,
+        normalize_whitespace=True,
+        aggressive=True,
+    )
+
+
 @dataclass
 class Stats:
     """Per-file scan statistics."""

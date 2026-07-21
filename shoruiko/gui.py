@@ -21,6 +21,9 @@ from shoruiko.core import (
     mode_light,
     mode_medium,
     mode_aggressive,
+    mode_academic,
+    mode_creator,
+    mode_publisher,
     Mode,
     Stats,
 )
@@ -134,15 +137,17 @@ class GlassCard(tk.Frame):
 # ═══════════════════════════════════════════════════════════════════════════
 
 class PillToolbar(tk.Frame):
-    """A centered floating pill-shaped toolbar with mode pills + action buttons."""
+    """A centered floating pill-shaped toolbar with category pills + action buttons."""
 
     def __init__(self, parent, on_scan, on_mode_change, **kwargs):
         super().__init__(parent, bg=BG, **kwargs)
         self._on_scan = on_scan
         self._on_mode_change = on_mode_change
-        self._mode = "medium"
+        self._category = "creator"
+        self._intensity = "medium"
         self._running = False
         self._pills: dict[str, tk.Label] = {}
+        self._intensity_dots: dict[str, tk.Label] = {}
         self._scan_btn = None
         self._spinner_idx = 0
         self._spinner_chars = "◐◓◑◒"
@@ -158,26 +163,53 @@ class PillToolbar(tk.Frame):
         pill_frame = tk.Frame(canvas, bg=TOOLBAR_BG)
         pill_win = canvas.create_window(0, 0, window=pill_frame, anchor="center")
 
-        # Mode pills
-        modes = [
-            ("light",     "◐ Light",      PURPLE),
-            ("medium",    "◑ Medium",     BLUE),
-            ("aggressive","◒ Aggressive", ORANGE),
+        # Category pills
+        categories = [
+            ("academic",  "🎓 Academic",   BLUE),
+            ("creator",   "✍️ Creator",    PURPLE),
+            ("publisher", "📰 Publisher",  ORANGE),
         ]
-        for mode_key, label_text, color in modes:
+        for cat_key, label_text, color in categories:
             pill = tk.Label(
                 pill_frame, text=label_text,
-                fg=color, bg=PILL_BG if mode_key != self._mode else PILL_ACTIVE,
-                font=FONT_PILL, padx=14, pady=6,
+                fg=color, bg=PILL_BG if cat_key != self._category else PILL_ACTIVE,
+                font=FONT_PILL, padx=10, pady=6,
                 cursor="hand2",
             )
             pill.pack(side="left", padx=2, pady=6)
-            pill.bind("<Button-1>", lambda e, m=mode_key: self._select_mode(m))
-            pill.bind("<Enter>", lambda e, p=pill: p.configure(bg="#202048"))
+            pill.bind("<Button-1>", lambda e, c=cat_key: self._select_category(c))
+            pill.bind("<Enter>",
+                lambda e, p=pill: p.configure(bg="#202048"))
             pill.bind("<Leave>",
-                lambda e, p=pill, m=mode_key:
-                    p.configure(bg=PILL_ACTIVE if self._mode == m else PILL_BG))
-            self._pills[mode_key] = pill
+                lambda e, p=pill, c=cat_key:
+                    p.configure(bg=PILL_ACTIVE if self._category == c else PILL_BG))
+            self._pills[cat_key] = pill
+
+        # Intensity dots separator
+        tk.Label(pill_frame, text=" · ", fg=TOOLBAR_BORDER, bg=TOOLBAR_BG,
+                font=FONT_PILL).pack(side="left")
+
+        # 3 intensity dot labels (clickable for manual override)
+        intensities = [
+            ("light",  "◐", PURPLE),
+            ("medium", "◑", BLUE),
+            ("aggressive", "◒", ORANGE),
+        ]
+        for key, symbol, color in intensities:
+            dot = tk.Label(
+                pill_frame, text=symbol,
+                fg=color if key == self._intensity else "#2a2a50",
+                bg=TOOLBAR_BG, font=("Inter", 11), padx=2,
+                cursor="hand2",
+            )
+            dot.pack(side="left", pady=6)
+            dot.bind("<Button-1>", lambda e, k=key: self._select_intensity(k))
+            dot.bind("<Enter>",
+                lambda e, d=dot, c=color: d.configure(fg=c))
+            dot.bind("<Leave>",
+                lambda e, d=dot, k=key:
+                    d.configure(fg=self._dot_color(k)))
+            self._intensity_dots[key] = dot
 
         # Separator
         tk.Label(pill_frame, text="│", fg=TOOLBAR_BORDER, bg=TOOLBAR_BG,
@@ -186,7 +218,7 @@ class PillToolbar(tk.Frame):
         # Scan button
         self._scan_btn = tk.Label(
             pill_frame, text="▶ Process",
-            fg=GREEN, bg=PILL_BG, font=FONT_PILL, padx=16, pady=6,
+            fg=GREEN, bg=PILL_BG, font=FONT_PILL, padx=14, pady=6,
             cursor="hand2",
         )
         self._scan_btn.pack(side="left", padx=2, pady=6)
@@ -200,10 +232,10 @@ class PillToolbar(tk.Frame):
         tk.Label(pill_frame, text="│", fg=TOOLBAR_BORDER, bg=TOOLBAR_BG,
                 font=FONT_PILL).pack(side="left", padx=6)
 
-        # Clear button
+        # Clear
         clear_btn = tk.Label(
             pill_frame, text="◕ Clear",
-            fg=PURPLE_GLOW, bg=PILL_BG, font=FONT_PILL, padx=12, pady=6,
+            fg=PURPLE_GLOW, bg=PILL_BG, font=FONT_PILL, padx=10, pady=6,
             cursor="hand2",
         )
         clear_btn.pack(side="left", padx=2, pady=6)
@@ -211,10 +243,10 @@ class PillToolbar(tk.Frame):
         clear_btn.bind("<Enter>", lambda e: clear_btn.configure(bg="#202030"))
         clear_btn.bind("<Leave>", lambda e: clear_btn.configure(bg=PILL_BG))
 
-        # Copy button
+        # Copy
         copy_btn = tk.Label(
             pill_frame, text="◔ Copy",
-            fg=BLUE_GLOW, bg=PILL_BG, font=FONT_PILL, padx=12, pady=6,
+            fg=BLUE_GLOW, bg=PILL_BG, font=FONT_PILL, padx=10, pady=6,
             cursor="hand2",
         )
         copy_btn.pack(side="left", padx=2, pady=6)
@@ -222,7 +254,7 @@ class PillToolbar(tk.Frame):
         copy_btn.bind("<Enter>", lambda e: copy_btn.configure(bg="#10102a"))
         copy_btn.bind("<Leave>", lambda e: copy_btn.configure(bg=PILL_BG))
 
-        # Center the pill frame
+        # Center and draw pill background
         def _center_pill(event=None):
             w = canvas.winfo_width()
             canvas.coords(pill_win, w // 2, 22)
@@ -240,11 +272,28 @@ class PillToolbar(tk.Frame):
         self._center_pill = _center_pill
         self._pill_win = pill_win
 
-    def _select_mode(self, mode_key: str):
-        self._mode = mode_key
+    def _dot_color(self, key: str) -> str:
+        colors = {"light": PURPLE, "medium": BLUE, "aggressive": ORANGE}
+        return colors.get(key, BLUE) if key == self._intensity else "#2a2a50"
+
+    def _refresh_dots(self):
+        for key, dot in self._intensity_dots.items():
+            dot.configure(fg=self._dot_color(key))
+
+    def _select_category(self, cat_key: str):
+        self._category = cat_key
         for key, pill in self._pills.items():
-            pill.configure(bg=PILL_ACTIVE if key == mode_key else PILL_BG)
-        self._on_mode_change(mode_key)
+            pill.configure(bg=PILL_ACTIVE if key == cat_key else PILL_BG)
+        # Reset intensity to category default
+        defaults = {"academic": "medium", "creator": "medium", "publisher": "aggressive"}
+        self._intensity = defaults.get(cat_key, "medium")
+        self._refresh_dots()
+        self._on_mode_change(cat_key)
+
+    def _select_intensity(self, key: str):
+        self._intensity = key
+        self._refresh_dots()
+        self._on_mode_change(self._category)
 
     def _clear(self):
         self._parent._clear_all()
@@ -275,11 +324,18 @@ class PillToolbar(tk.Frame):
 
     @property
     def mode(self) -> Mode:
-        if self._mode == "light":
-            return mode_light()
-        elif self._mode == "aggressive":
-            return mode_aggressive()
-        return mode_medium()
+        """Resolve category + intensity override into a concrete Mode."""
+        if self._category == "academic":
+            return mode_academic()
+        elif self._category == "publisher":
+            return mode_publisher()
+        else:
+            return mode_creator()
+
+    @property
+    def category_name(self) -> str:
+        names = {"academic": "Academic", "creator": "Creator", "publisher": "Publisher"}
+        return names.get(self._category, "Creator")
 
     @property
     def _parent(self):
@@ -454,9 +510,12 @@ class ShoruikoApp(tk.Tk):
 
         # Keyboard shortcuts
         self.bind("<Control-Return>", lambda e: self._scan())
-        self.bind("<Control-l>", lambda e: self._toolbar._select_mode("light"))
-        self.bind("<Control-m>", lambda e: self._toolbar._select_mode("medium"))
-        self.bind("<Control-a>", lambda e: self._toolbar._select_mode("aggressive"))
+        self.bind("<Control-l>", lambda e: self._toolbar._select_intensity("light"))
+        self.bind("<Control-m>", lambda e: self._toolbar._select_intensity("medium"))
+        self.bind("<Control-a>", lambda e: self._toolbar._select_intensity("aggressive"))
+        self.bind("<Control-1>", lambda e: self._toolbar._select_category("academic"))
+        self.bind("<Control-2>", lambda e: self._toolbar._select_category("creator"))
+        self.bind("<Control-3>", lambda e: self._toolbar._select_category("publisher"))
         self.bind("<Control-o>", lambda e: self._browse_file())
         self.bind("<Escape>", lambda e: self.destroy())
 
@@ -662,11 +721,11 @@ class ShoruikoApp(tk.Tk):
         count = len(self._input.get("1.0", "end-1c"))
         self._char_count_label.configure(text=f"{count:,} chars")
 
-    def _on_mode_change(self, mode_key: str):
-        mode_names = {"light": "Light", "medium": "Medium",
-                      "aggressive": "Aggressive"}
+    def _on_mode_change(self, cat_key: str):
+        cat_names = {"academic": "Academic", "creator": "Creator",
+                     "publisher": "Publisher"}
         self._status_label.configure(
-            text=f"Mode: {mode_names.get(mode_key, mode_key)}",
+            text=f"Category: {cat_names.get(cat_key, cat_key)}",
             fg=TEXT_MUTED,
         )
 
