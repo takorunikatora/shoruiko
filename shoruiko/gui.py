@@ -4,7 +4,7 @@ Design language:
   - Liquid glass: semi-transparent cards with subtle border glow
   - Bento grid: modular rounded-rect content blocks
   - Center-floating pill toolbar: mode selector + action buttons
-  - Colors: blue (#4055ff) and purple (#8855ff) neon on dark navy (#08080f)
+  - Colors: blue (#4055ff), green (#22dd55), and purple (#8855ff) neon on dark navy (#08080f)
 """
 
 from __future__ import annotations
@@ -36,8 +36,8 @@ BG = "#08080f"
 CARD_BG = "#0d0d1a"
 CARD_BORDER = "#1a1a33"
 INPUT_BG = "#0a0a14"
-TEXT = "#c8d0e0"
-TEXT_MUTED = "#6b7da8"
+TEXT = "#99bbff"
+TEXT_MUTED = "#7766cc"
 BLUE = "#4055ff"
 BLUE_GLOW = "#6b7bff"
 BLUE_DIM = "#2a3aaa"
@@ -198,7 +198,7 @@ class PillToolbar(tk.Frame):
         for key, symbol, color in intensities:
             dot = tk.Label(
                 pill_frame, text=symbol,
-                fg=color if key == self._intensity else "#2a2a50",
+                fg=color if key == self._intensity else "#2a1a50",
                 bg=TOOLBAR_BG, font=("Inter", 11), padx=2,
                 cursor="hand2",
             )
@@ -240,7 +240,7 @@ class PillToolbar(tk.Frame):
         )
         clear_btn.pack(side="left", padx=2, pady=6)
         clear_btn.bind("<Button-1>", lambda e: self._clear())
-        clear_btn.bind("<Enter>", lambda e: clear_btn.configure(bg="#202030"))
+        clear_btn.bind("<Enter>", lambda e: clear_btn.configure(bg="#2a2050"))
         clear_btn.bind("<Leave>", lambda e: clear_btn.configure(bg=PILL_BG))
 
         # Copy
@@ -274,7 +274,7 @@ class PillToolbar(tk.Frame):
 
     def _dot_color(self, key: str) -> str:
         colors = {"light": PURPLE, "medium": BLUE, "aggressive": ORANGE}
-        return colors.get(key, BLUE) if key == self._intensity else "#2a2a50"
+        return colors.get(key, BLUE) if key == self._intensity else "#2a1a50"
 
     def _refresh_dots(self):
         for key, dot in self._intensity_dots.items():
