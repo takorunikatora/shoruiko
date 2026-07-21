@@ -3,7 +3,7 @@
 Design language:
   - Liquid glass: semi-transparent cards with subtle border glow
   - Bento grid: modular rounded-rect content blocks
-  - Center-floating pill toolbar: mode selector + action buttons
+  - Center-floating pill toolbar: category/intensity selector + scan/clear/copy buttons
   - Colors: blue (#4055ff), green (#22dd55), and purple (#8855ff) neon on deep purple (#050018)
 """
 
@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 import threading
 import tkinter as tk
-from tkinter import ttk, scrolledtext, messagebox, filedialog
+from tkinter import scrolledtext, messagebox, filedialog
 import difflib
 
 from shoruiko.core import (
@@ -154,14 +154,13 @@ class PillToolbar(tk.Frame):
         self._build()
 
     def _build(self):
+        # Simple frame-based toolbar — no canvas sizing bugs
         outer = tk.Frame(self, bg=TOOLBAR_BG, bd=0, highlightthickness=0)
-        outer.pack(expand=True)
+        outer.pack(fill="x", pady=2)
 
-        canvas = tk.Canvas(outer, bg=BG, height=44, highlightthickness=0, bd=0)
-        canvas.pack()
-
-        pill_frame = tk.Frame(canvas, bg=TOOLBAR_BG)
-        pill_win = canvas.create_window(0, 0, window=pill_frame, anchor="center")
+        # Center container
+        center = tk.Frame(outer, bg=TOOLBAR_BG)
+        center.pack(expand=True)
 
         # Category pills
         categories = [
@@ -171,7 +170,7 @@ class PillToolbar(tk.Frame):
         ]
         for cat_key, label_text, color in categories:
             pill = tk.Label(
-                pill_frame, text=label_text,
+                center, text=label_text,
                 fg=color, bg=PILL_BG if cat_key != self._category else PILL_ACTIVE,
                 font=FONT_PILL, padx=10, pady=6,
                 cursor="hand2",
@@ -186,7 +185,7 @@ class PillToolbar(tk.Frame):
             self._pills[cat_key] = pill
 
         # Intensity dots separator
-        tk.Label(pill_frame, text=" · ", fg=TOOLBAR_BORDER, bg=TOOLBAR_BG,
+        tk.Label(center, text=" · ", fg=TOOLBAR_BORDER, bg=TOOLBAR_BG,
                 font=FONT_PILL).pack(side="left")
 
         # 3 intensity dot labels (clickable for manual override)
@@ -197,7 +196,7 @@ class PillToolbar(tk.Frame):
         ]
         for key, symbol, color in intensities:
             dot = tk.Label(
-                pill_frame, text=symbol,
+                center, text=symbol,
                 fg=color if key == self._intensity else "#2a1a50",
                 bg=TOOLBAR_BG, font=("Inter", 11), padx=2,
                 cursor="hand2",
@@ -212,12 +211,12 @@ class PillToolbar(tk.Frame):
             self._intensity_dots[key] = dot
 
         # Separator
-        tk.Label(pill_frame, text="│", fg=TOOLBAR_BORDER, bg=TOOLBAR_BG,
+        tk.Label(center, text="│", fg=TOOLBAR_BORDER, bg=TOOLBAR_BG,
                 font=FONT_PILL).pack(side="left", padx=6)
 
         # Scan button
         self._scan_btn = tk.Label(
-            pill_frame, text="▶ Process",
+            center, text="▶ Process",
             fg=GREEN, bg=PILL_BG, font=FONT_PILL, padx=14, pady=6,
             cursor="hand2",
         )
@@ -229,12 +228,12 @@ class PillToolbar(tk.Frame):
             lambda e: self._scan_btn.configure(bg=PILL_BG))
 
         # Separator
-        tk.Label(pill_frame, text="│", fg=TOOLBAR_BORDER, bg=TOOLBAR_BG,
+        tk.Label(center, text="│", fg=TOOLBAR_BORDER, bg=TOOLBAR_BG,
                 font=FONT_PILL).pack(side="left", padx=6)
 
         # Clear
         clear_btn = tk.Label(
-            pill_frame, text="◕ Clear",
+            center, text="◕ Clear",
             fg=PURPLE_GLOW, bg=PILL_BG, font=FONT_PILL, padx=10, pady=6,
             cursor="hand2",
         )
@@ -245,7 +244,7 @@ class PillToolbar(tk.Frame):
 
         # Copy
         copy_btn = tk.Label(
-            pill_frame, text="◔ Copy",
+            center, text="◔ Copy",
             fg=BLUE_GLOW, bg=PILL_BG, font=FONT_PILL, padx=10, pady=6,
             cursor="hand2",
         )
@@ -253,24 +252,6 @@ class PillToolbar(tk.Frame):
         copy_btn.bind("<Button-1>", lambda e: self._copy())
         copy_btn.bind("<Enter>", lambda e: copy_btn.configure(bg="#080030"))
         copy_btn.bind("<Leave>", lambda e: copy_btn.configure(bg=PILL_BG))
-
-        # Center and draw pill background
-        def _center_pill(event=None):
-            w = canvas.winfo_width()
-            canvas.coords(pill_win, w // 2, 22)
-            canvas.delete("pill_bg")
-            pw = pill_frame.winfo_reqwidth() + 20
-            canvas.create_rounded_rect(
-                (w - pw) // 2, 1, (w + pw) // 2, 43,
-                radius=21, fill=TOOLBAR_BG, outline=TOOLBAR_BORDER, width=1,
-                tags="pill_bg",
-            )
-            canvas.tag_lower("pill_bg")
-
-        canvas.bind("<Configure>", _center_pill)
-        self._canvas = canvas
-        self._center_pill = _center_pill
-        self._pill_win = pill_win
 
     def _dot_color(self, key: str) -> str:
         colors = {"light": PURPLE, "medium": BLUE, "aggressive": ORANGE}
@@ -525,18 +506,6 @@ class ShoruikoApp(tk.Tk):
         self.geometry("1100x750")
         self.minsize(800, 500)
 
-        # ── Nuke system scrollbar theme colours ──
-        style = ttk.Style()
-        style.theme_use("clam")  # clam is the most styleable on Linux
-        style.configure("TScrollbar",
-            background=BG, troughcolor=BG,
-            bordercolor=BG, arrowcolor=PURPLE_GLOW,
-            darkcolor=BG, lightcolor=BG,
-        )
-        style.map("TScrollbar",
-            background=[("active", PURPLE_DIM)],
-        )
-
         try:
             self.attributes("-alpha", 0.97)
         except Exception:
@@ -661,12 +630,9 @@ class ShoruikoApp(tk.Tk):
         self._input.pack(fill="both", expand=True)
         self._input.configure(highlightbackground=BG, highlightcolor=BG)
 
-        # Replace ScrolledText's classic scrollbar with a themed ttk one
-        self._input.vbar.destroy()
-        self._input.vbar = ttk.Scrollbar(
-            input_card, orient="vertical", command=self._input.yview)
-        self._input.configure(yscrollcommand=self._input.vbar.set)
-        self._input.vbar.pack(side="right", fill="y")
+        # Hide scrollbar — system theme grey is unstylable
+        # Hide scrollbar — unstylable on Linux; mousewheel + touchpad scrolling works
+        self._input.vbar.pack_forget()
         self._input.bind("<Control-v>",
             lambda e: self.after(100, self._update_char_count))
         self._input.bind("<KeyRelease>",
@@ -717,12 +683,9 @@ class ShoruikoApp(tk.Tk):
         self._output.pack(fill="both", expand=True)
         self._output.configure(highlightbackground=BG, highlightcolor=BG)
 
-        # Replace ScrolledText's classic scrollbar with a themed ttk one
-        self._output.vbar.destroy()
-        self._output.vbar = ttk.Scrollbar(
-            output_card, orient="vertical", command=self._output.yview)
-        self._output.configure(yscrollcommand=self._output.vbar.set)
-        self._output.vbar.pack(side="right", fill="y")
+        # Hide scrollbar — system theme grey is unstylable
+        # Hide scrollbar — unstylable on Linux; mousewheel + touchpad scrolling works
+        self._output.vbar.pack_forget()
 
         # ── Pill toolbar (floating at bottom) ──
         toolbar_frame = tk.Frame(self, bg=BG, height=50)
