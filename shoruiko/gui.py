@@ -1,0 +1,696 @@
+"""shoruiko GUI — liquid glass bento-grid desktop application.
+
+Design language:
+  - Liquid glass: semi-transparent cards with subtle border glow
+  - Bento grid: modular rounded-rect content blocks
+  - Center-floating pill toolbar: mode selector + action buttons
+  - Colors: blue (#4055ff) and grey (#7b8caa) neon on dark navy (#08080f)
+"""
+
+from __future__ import annotations
+
+import threading
+import tkinter as tk
+from tkinter import ttk, scrolledtext, messagebox
+import difflib
+
+from shoruiko.core import (
+    shoruiko,
+    mode_light,
+    mode_medium,
+    mode_aggressive,
+    Mode,
+    Stats,
+)
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Color palette — blue & grey neon on dark navy
+# ═══════════════════════════════════════════════════════════════════════════
+
+BG = "#08080f"
+CARD_BG = "#0d0d1a"
+CARD_BORDER = "#1a1a33"
+INPUT_BG = "#0a0a14"
+TEXT = "#c8d0e0"
+TEXT_MUTED = "#6b7da8"
+BLUE = "#4055ff"
+BLUE_GLOW = "#6b7bff"
+BLUE_DIM = "#2a3aaa"
+GREY = "#7b8caa"
+GREY_GLOW = "#9aabcc"
+GREEN = "#22dd55"
+RED = "#ff4055"
+ORANGE = "#ff6622"
+YELLOW = "#ffbb22"
+TOOLBAR_BG = "#12122a"
+TOOLBAR_BORDER = "#252550"
+PILL_BG = "#1a1a38"
+PILL_ACTIVE = "#252548"
+PILL_BORDER = "#3a3a60"
+HIGHLIGHT_BG = "#101030"
+
+FONT_TITLE = ("Inter", 13, "bold")
+FONT_HEADING = ("Inter", 11, "bold")
+FONT_BODY = ("Inter", 10)
+FONT_MONO = ("JetBrains Mono", 9)
+FONT_SMALL = ("Inter", 8)
+FONT_PILL = ("Inter", 9, "bold")
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Glass card widget
+# ═══════════════════════════════════════════════════════════════════════════
+
+class GlassCard(tk.Frame):
+    """A bento-grid card with liquid-glass styling."""
+
+    def __init__(self, parent, title: str = "", **kwargs):
+        super().__init__(parent, bg=BG, **kwargs)
+        self._title = title
+
+        self.canvas = tk.Canvas(
+            self, bg=BG, highlightthickness=0, bd=0,
+        )
+        self.canvas.pack(fill="both", expand=True)
+
+        # Inner frame for content
+        self.inner = tk.Frame(self.canvas, bg=CARD_BG)
+        self._win_id = None
+
+        # Header bar inside card
+        if title:
+            self._header = tk.Frame(self.inner, bg="#10102a", height=28)
+            self._header.pack(fill="x", side="top")
+            self._header.pack_propagate(False)
+            tk.Label(
+                self._header, text=title, fg=BLUE_GLOW, bg="#10102a",
+                font=FONT_HEADING, anchor="w",
+            ).pack(side="left", padx=12, pady=2)
+
+        self.canvas.bind("<Configure>", self._on_resize)
+
+    def _on_resize(self, event=None):
+        w = self.canvas.winfo_width()
+        h = self.canvas.winfo_height()
+        if w < 4 or h < 4:
+            return
+        if self._win_id:
+            self.canvas.delete(self._win_id)
+        # Draw card with rounded corners
+        r = 10
+        self.canvas.delete("card_shape")
+        self._draw_rounded_rect(0, 0, w, h, r, fill=CARD_BG, outline=CARD_BORDER, width=1)
+
+        # Place inner frame
+        pad = 1
+        if self._win_id:
+            self.canvas.delete(self._win_id)
+        self._win_id = self.canvas.create_window(
+            pad, 28 if self._title else pad,
+            window=self.inner, anchor="nw",
+            width=w - pad * 2,
+        )
+
+    def _draw_rounded_rect(self, x1, y1, x2, y2, r, **kwargs):
+        """Draw a rounded rectangle on the canvas."""
+        points = [
+            x1 + r, y1,
+            x2 - r, y1,
+            x2, y1,
+            x2, y1 + r,
+            x2, y2 - r,
+            x2, y2,
+            x2 - r, y2,
+            x1 + r, y2,
+            x1, y2,
+            x1, y2 - r,
+            x1, y1 + r,
+            x1, y1,
+        ]
+        self.canvas.create_polygon(points, smooth=True, tags="card_shape", **kwargs)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Pill toolbar (center-floating)
+# ═══════════════════════════════════════════════════════════════════════════
+
+class PillToolbar(tk.Frame):
+    """A centered floating pill-shaped toolbar with mode pills + action buttons."""
+
+    def __init__(self, parent, on_scan, on_mode_change, **kwargs):
+        super().__init__(parent, bg=BG, **kwargs)
+        self._on_scan = on_scan
+        self._on_mode_change = on_mode_change
+        self._mode = "medium"
+        self._running = False
+        self._pills: dict[str, tk.Label] = {}
+        self._scan_btn = None
+        self._spinner_idx = 0
+        self._spinner_chars = "◐◓◑◒"
+
+        self._build()
+
+    def _build(self):
+        # Outer pill container
+        outer = tk.Frame(self, bg=TOOLBAR_BG, bd=0, highlightthickness=0)
+        outer.pack(expand=True)
+
+        # Draw pill shape via canvas background
+        canvas = tk.Canvas(outer, bg=BG, height=44, highlightthickness=0, bd=0)
+        canvas.pack()
+
+        # Pill body
+        pill_frame = tk.Frame(canvas, bg=TOOLBAR_BG)
+        pill_win = canvas.create_window(0, 0, window=pill_frame, anchor="center")
+
+        # Mode pills
+        modes = [
+            ("light",  "◐ Light",   GREY),
+            ("medium", "◑ Medium",  BLUE),
+            ("aggressive", "◒ Aggressive", ORANGE),
+        ]
+        for mode_key, label_text, color in modes:
+            pill = tk.Label(
+                pill_frame, text=label_text,
+                fg=color, bg=PILL_BG if mode_key != self._mode else PILL_ACTIVE,
+                font=FONT_PILL, padx=14, pady=6,
+                cursor="hand2",
+            )
+            pill.pack(side="left", padx=2, pady=6)
+            pill.bind("<Button-1>", lambda e, m=mode_key: self._select_mode(m))
+            pill.bind("<Enter>", lambda e, p=pill: p.configure(bg="#202048"))
+            pill.bind("<Leave>", lambda e, p=pill: p.configure(
+                bg=PILL_ACTIVE if self._mode in [m for m2 in modes for m in [m2[0]]]
+                else PILL_BG))
+            self._pills[mode_key] = pill
+
+        # Separator
+        tk.Label(pill_frame, text="│", fg=TOOLBAR_BORDER, bg=TOOLBAR_BG,
+                font=FONT_PILL).pack(side="left", padx=6)
+
+        # Scan button
+        self._scan_btn = tk.Label(
+            pill_frame, text="▶ Process",
+            fg=GREEN, bg=PILL_BG, font=FONT_PILL, padx=16, pady=6,
+            cursor="hand2",
+        )
+        self._scan_btn.pack(side="left", padx=2, pady=6)
+        self._scan_btn.bind("<Button-1>", lambda e: self._on_scan())
+        self._scan_btn.bind("<Enter>", lambda e: self._scan_btn.configure(bg="#103020"))
+        self._scan_btn.bind("<Leave>", lambda e: self._scan_btn.configure(bg=PILL_BG))
+
+        # Separator
+        tk.Label(pill_frame, text="│", fg=TOOLBAR_BORDER, bg=TOOLBAR_BG,
+                font=FONT_PILL).pack(side="left", padx=6)
+
+        # Clear button
+        clear_btn = tk.Label(
+            pill_frame, text="◕ Clear",
+            fg=GREY_GLOW, bg=PILL_BG, font=FONT_PILL, padx=12, pady=6,
+            cursor="hand2",
+        )
+        clear_btn.pack(side="left", padx=2, pady=6)
+        clear_btn.bind("<Button-1>", lambda e: self._clear())
+        clear_btn.bind("<Enter>", lambda e: clear_btn.configure(bg="#202030"))
+        clear_btn.bind("<Leave>", lambda e: clear_btn.configure(bg=PILL_BG))
+
+        # Copy button
+        copy_btn = tk.Label(
+            pill_frame, text="◔ Copy",
+            fg=BLUE_GLOW, bg=PILL_BG, font=FONT_PILL, padx=12, pady=6,
+            cursor="hand2",
+        )
+        copy_btn.pack(side="left", padx=2, pady=6)
+        copy_btn.bind("<Button-1>", lambda e: self._copy())
+        copy_btn.bind("<Enter>", lambda e: copy_btn.configure(bg="#10102a"))
+        copy_btn.bind("<Leave>", lambda e: copy_btn.configure(bg=PILL_BG))
+
+        # Center the pill frame in canvas
+        def _center_pill(event=None):
+            w = canvas.winfo_width()
+            canvas.coords(pill_win, w // 2, 22)
+            # Draw pill background
+            canvas.delete("pill_bg")
+            pw = pill_frame.winfo_reqwidth() + 20
+            canvas.create_rounded_rect(
+                (w - pw) // 2, 1, (w + pw) // 2, 43,
+                radius=21, fill=TOOLBAR_BG, outline=TOOLBAR_BORDER, width=1,
+                tags="pill_bg",
+            )
+            canvas.tag_lower("pill_bg")
+
+        canvas.bind("<Configure>", _center_pill)
+        self._canvas = canvas
+        self._center_pill = _center_pill
+        self._pill_win = pill_win
+
+    def _select_mode(self, mode_key: str):
+        self._mode = mode_key
+        for key, pill in self._pills.items():
+            pill.configure(
+                bg=PILL_ACTIVE if key == mode_key else PILL_BG,
+            )
+        self._on_mode_change(mode_key)
+
+    def _clear(self):
+        self._parent._clear_all()
+
+    def _copy(self):
+        if hasattr(self._parent, "_output"):
+            text = self._parent._output.get("1.0", "end-1c")
+            self.clipboard_clear()
+            self.clipboard_append(text)
+            self._parent._status_label.configure(text="✓ Copied to clipboard", fg=GREEN)
+
+    def _animate_spinner(self):
+        if not self._running:
+            return
+        self._spinner_idx = (self._spinner_idx + 1) % len(self._spinner_chars)
+        self._scan_btn.configure(text=f"{self._spinner_chars[self._spinner_idx]} ...")
+        self.after(120, self._animate_spinner)
+
+    def start_scan(self):
+        self._running = True
+        self._animate_spinner()
+
+    def stop_scan(self):
+        self._running = False
+        self._scan_btn.configure(text="▶ Process")
+
+    @property
+    def mode(self) -> Mode:
+        if self._mode == "light":
+            return mode_light()
+        elif self._mode == "aggressive":
+            return mode_aggressive()
+        return mode_medium()
+
+    @property
+    def _parent(self):
+        return self.master
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Stats card
+# ═══════════════════════════════════════════════════════════════════════════
+
+class StatsPanel(tk.Frame):
+    """Compact stats display showing change counts."""
+
+    def __init__(self, parent, **kwargs):
+        super().__init__(parent, bg=CARD_BG, **kwargs)
+        self._stat_labels: dict[str, tuple[tk.Label, tk.Label]] = {}
+        self._build()
+
+    def _build(self):
+        # Header
+        header = tk.Frame(self, bg="#10102a", height=24)
+        header.pack(fill="x")
+        header.pack_propagate(False)
+        tk.Label(
+            header, text="Scan Results", fg=GREY_GLOW, bg="#10102a",
+            font=FONT_SMALL, anchor="w",
+        ).pack(side="left", padx=8, pady=3)
+
+        self._summary = tk.Label(
+            header, text="Ready", fg=TEXT_MUTED, bg="#10102a",
+            font=FONT_SMALL, anchor="e",
+        )
+        self._summary.pack(side="right", padx=8, pady=3)
+
+        # Scrollable stats area
+        self._stats_frame = tk.Frame(self, bg=CARD_BG)
+        self._stats_frame.pack(fill="both", expand=True, padx=4, pady=4)
+
+    def update(self, stats: Stats):
+        for widget in self._stats_frame.winfo_children():
+            widget.destroy()
+
+        entries: list[tuple[str, int, str]] = []
+        if stats.chatbot_lines:
+            entries.append(("Chatbot", stats.chatbot_lines, RED))
+        if stats.sycophantic_lines:
+            entries.append(("Sycophantic", stats.sycophantic_lines, RED))
+        if stats.disclaimers:
+            entries.append(("Disclaimers", stats.disclaimers, ORANGE))
+        if stats.generic_endings:
+            entries.append(("Endings", stats.generic_endings, ORANGE))
+        if stats.filler_substitutions:
+            entries.append(("Filler", stats.filler_substitutions, YELLOW))
+        if stats.hedging_substitutions:
+            entries.append(("Hedging", stats.hedging_substitutions, YELLOW))
+        if stats.copula_substitutions:
+            entries.append(("Copula", stats.copula_substitutions, YELLOW))
+        if stats.formal_linking_substitutions:
+            entries.append(("Formal", stats.formal_linking_substitutions, YELLOW))
+        if stats.rule_of_three_rewrites:
+            entries.append(("Rule of 3", stats.rule_of_three_rewrites, BLUE))
+        if stats.contrast_rewrites:
+            entries.append(("Contrasts", stats.contrast_rewrites, BLUE))
+        if stats.overstructuring_rewrites:
+            entries.append(("Structure", stats.overstructuring_rewrites, BLUE))
+        if stats.vocabulary_swaps:
+            entries.append(("Vocab", stats.vocabulary_swaps, BLUE_GLOW))
+        if stats.em_dashes_normalized:
+            entries.append(("Em-dashes", stats.em_dashes_normalized, GREY))
+        if stats.passive_rewrites:
+            entries.append(("Passive", stats.passive_rewrites, GREY))
+
+        if not entries:
+            tk.Label(
+                self._stats_frame, text="No AI patterns found",
+                fg=TEXT_MUTED, bg=CARD_BG, font=FONT_SMALL,
+            ).pack(padx=8, pady=8)
+            self._summary.configure(text="Clean ✓", fg=GREEN)
+            return
+
+        for name, count, color in entries:
+            row = tk.Frame(self._stats_frame, bg=CARD_BG)
+            row.pack(fill="x", padx=4, pady=0)
+            tk.Label(
+                row, text=name, fg=color, bg=CARD_BG,
+                font=FONT_SMALL, anchor="w", width=10,
+            ).pack(side="left")
+            tk.Label(
+                row, text=str(count), fg=TEXT, bg=CARD_BG,
+                font=FONT_SMALL, anchor="e",
+            ).pack(side="right")
+
+        pct = stats.ratio
+        self._summary.configure(
+            text=f"{stats.total_changes} changes | -{pct}%",
+            fg=GREEN if stats.total_changes > 0 else TEXT_MUTED,
+        )
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Patterns card
+# ═══════════════════════════════════════════════════════════════════════════
+
+class PatternsPanel(tk.Frame):
+    """Checklist of AI pattern categories with toggle visibility."""
+
+    def __init__(self, parent, on_toggle=None, **kwargs):
+        super().__init__(parent, bg=CARD_BG, **kwargs)
+        self._on_toggle = on_toggle
+        self._build()
+
+    def _build(self):
+        header = tk.Frame(self, bg="#10102a", height=24)
+        header.pack(fill="x")
+        header.pack_propagate(False)
+        tk.Label(
+            header, text="Pattern Filters", fg=BLUE_GLOW, bg="#10102a",
+            font=FONT_SMALL, anchor="w",
+        ).pack(side="left", padx=8, pady=3)
+
+        scroll = tk.Frame(self, bg=CARD_BG)
+        scroll.pack(fill="both", expand=True, padx=6, pady=4)
+
+        patterns = [
+            ("Chatbot artifacts", True),
+            ("Sycophantic tone", True),
+            ("Knowledge-cutoff disclaimers", True),
+            ("Generic endings", True),
+            ("Filler phrases", True),
+            ("Hedging / uncertainty", False),
+            ("Copula avoidance", False),
+            ("Formal linking words", False),
+            ("Rule of three", False),
+            ("Exaggerated contrasts", False),
+            ("Overstructuring", False),
+            ("AI vocabulary swap", False),
+            ("Em-dash overuse", False),
+            ("Passive voice", False),
+        ]
+
+        for name, enabled in patterns:
+            var = tk.BooleanVar(value=enabled)
+            cb = tk.Checkbutton(
+                scroll, text=name, variable=var,
+                fg=TEXT_MUTED, bg=CARD_BG, selectcolor=CARD_BG,
+                font=FONT_SMALL, activebackground=CARD_BG,
+                activeforeground=TEXT,
+                command=lambda n=name, v=var: self._toggle(n, v.get()),
+            )
+            cb.pack(anchor="w", pady=1)
+
+    def _toggle(self, name: str, enabled: bool):
+        pass  # Reserved for future per-pattern toggles
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Main application window
+# ═══════════════════════════════════════════════════════════════════════════
+
+class ShoruikoApp(tk.Tk):
+    def __init__(self):
+        super().__init__()
+        self.title("shoruiko")
+        self.configure(bg=BG)
+        self.geometry("1100x750")
+        self.minsize(800, 500)
+
+        # Try to set window transparency (Linux)
+        try:
+            self.attributes("-alpha", 0.97)
+        except Exception:
+            pass
+
+        # Variables
+        self._last_result = ""
+        self._last_stats = Stats(bytes_before=0, bytes_after=0)
+        self._mode = mode_medium()
+
+        self._build_ui()
+
+        # Keyboard shortcuts
+        self.bind("<Control-Return>", lambda e: self._scan())
+        self.bind("<Control-l>", lambda e: self._toolbar._select_mode("light"))
+        self.bind("<Control-m>", lambda e: self._toolbar._select_mode("medium"))
+        self.bind("<Control-a>", lambda e: self._toolbar._select_mode("aggressive"))
+        self.bind("<Escape>", lambda e: self.destroy())
+
+    def _build_ui(self):
+        # ── Header ──
+        header = tk.Frame(self, bg=BG, height=42)
+        header.pack(fill="x", side="top", padx=16, pady=(10, 0))
+        header.pack_propagate(False)
+
+        tk.Label(
+            header, text="◉", fg=BLUE_GLOW, bg=BG,
+            font=("Inter", 18),
+        ).pack(side="left", padx=(0, 8))
+
+        tk.Label(
+            header, text="shoruiko", fg=TEXT, bg=BG,
+            font=("Inter", 16, "bold"),
+        ).pack(side="left")
+
+        tk.Label(
+            header, text="strip AI fingerprints from prose", fg=TEXT_MUTED, bg=BG,
+            font=FONT_SMALL,
+        ).pack(side="left", padx=10, pady=(6, 0))
+
+        self._status_label = tk.Label(
+            header, text="Ready", fg=TEXT_MUTED, bg=BG,
+            font=FONT_SMALL,
+        )
+        self._status_label.pack(side="right", padx=8, pady=(6, 0))
+
+        # ── Bento grid (main area) ──
+        grid = tk.Frame(self, bg=BG)
+        grid.pack(fill="both", expand=True, padx=12, pady=8)
+
+        # Row 0: Input (span 2 cols) | Patterns | Stats
+        grid.columnconfigure(0, weight=3)  # Input
+        grid.columnconfigure(1, weight=1)  # Right panel
+        grid.rowconfigure(0, weight=1)
+
+        # Right panel (patterns + stats stacked)
+        right = tk.Frame(grid, bg=BG)
+        right.grid(row=0, column=1, sticky="nsew", padx=(4, 0))
+        right.columnconfigure(0, weight=1)
+        right.rowconfigure(0, weight=1)
+        right.rowconfigure(1, weight=1)
+
+        # Input card (left, spans full height)
+        input_card = tk.Frame(grid, bg=CARD_BG, bd=0, highlightthickness=1,
+                              highlightbackground=CARD_BORDER)
+        input_card.grid(row=0, column=0, sticky="nsew", padx=(0, 0))
+
+        input_header = tk.Frame(input_card, bg="#10102a", height=28)
+        input_header.pack(fill="x")
+        input_header.pack_propagate(False)
+        tk.Label(
+            input_header, text="Input Text", fg=BLUE_GLOW, bg="#10102a",
+            font=FONT_HEADING, anchor="w",
+        ).pack(side="left", padx=12, pady=2)
+        tk.Label(
+            input_header, text="paste or type prose to process", fg=TEXT_MUTED,
+            bg="#10102a", font=FONT_SMALL,
+        ).pack(side="right", padx=12, pady=2)
+
+        self._input = scrolledtext.ScrolledText(
+            input_card, bg=INPUT_BG, fg=TEXT, insertbackground=BLUE,
+            font=FONT_BODY, wrap="word", relief="flat", bd=0,
+            padx=12, pady=10, selectbackground="#202060",
+        )
+        self._input.pack(fill="both", expand=True)
+        self._input.bind("<Control-v>", lambda e: self.after(100, self._update_char_count))
+        self._input.bind("<KeyRelease>", lambda e: self._update_char_count())
+
+        # Patterns card
+        pat_frame = tk.Frame(right, bg=CARD_BG, bd=0, highlightthickness=1,
+                             highlightbackground=CARD_BORDER)
+        pat_frame.grid(row=0, column=0, sticky="nsew", pady=(0, 2))
+        self._patterns = PatternsPanel(pat_frame)
+        self._patterns.pack(fill="both", expand=True)
+
+        # Stats card
+        stats_frame = tk.Frame(right, bg=CARD_BG, bd=0, highlightthickness=1,
+                               highlightbackground=CARD_BORDER)
+        stats_frame.grid(row=1, column=0, sticky="nsew", pady=(2, 0))
+        self._stats_panel = StatsPanel(stats_frame)
+        self._stats_panel.pack(fill="both", expand=True)
+
+        # Row 1: Output (spans full width below input)
+        grid.rowconfigure(1, weight=1)
+        output_card = tk.Frame(grid, bg=CARD_BG, bd=0, highlightthickness=1,
+                              highlightbackground=CARD_BORDER)
+        output_card.grid(row=1, column=0, columnspan=2, sticky="nsew", pady=(6, 0))
+
+        output_header = tk.Frame(output_card, bg="#10102a", height=28)
+        output_header.pack(fill="x")
+        output_header.pack_propagate(False)
+        tk.Label(
+            output_header, text="Output", fg=GREEN, bg="#10102a",
+            font=FONT_HEADING, anchor="w",
+        ).pack(side="left", padx=12, pady=2)
+
+        self._char_count_label = tk.Label(
+            output_header, text="", fg=TEXT_MUTED, bg="#10102a", font=FONT_SMALL,
+        )
+        self._char_count_label.pack(side="right", padx=12, pady=2)
+
+        self._output = scrolledtext.ScrolledText(
+            output_card, bg=INPUT_BG, fg=TEXT, insertbackground=BLUE,
+            font=FONT_BODY, wrap="word", relief="flat", bd=0,
+            padx=12, pady=10, selectbackground="#202060",
+        )
+        self._output.pack(fill="both", expand=True)
+
+        # ── Pill toolbar (floating at bottom) ──
+        toolbar_frame = tk.Frame(self, bg=BG, height=50)
+        toolbar_frame.pack(fill="x", side="bottom", padx=16, pady=(6, 10))
+        toolbar_frame.pack_propagate(False)
+
+        self._toolbar = PillToolbar(
+            toolbar_frame,
+            on_scan=self._scan,
+            on_mode_change=self._on_mode_change,
+        )
+        self._toolbar.pack(fill="both", expand=True)
+
+    def _update_char_count(self):
+        count = len(self._input.get("1.0", "end-1c"))
+        self._char_count_label.configure(text=f"{count:,} chars")
+
+    def _on_mode_change(self, mode_key: str):
+        mode_names = {"light": "Light", "medium": "Medium", "aggressive": "Aggressive"}
+        self._status_label.configure(
+            text=f"Mode: {mode_names.get(mode_key, mode_key)}",
+            fg=TEXT_MUTED,
+        )
+
+    def _scan(self):
+        text = self._input.get("1.0", "end-1c")
+        if not text.strip():
+            self._status_label.configure(text="Nothing to process", fg=ORANGE)
+            return
+
+        self._toolbar.start_scan()
+        self._status_label.configure(text="Processing...", fg=YELLOW)
+
+        def _run():
+            result, stats = shoruiko(text, self._toolbar.mode)
+            self._last_result = result
+            self._last_stats = stats
+            self.after(0, self._show_result, result, stats)
+
+        threading.Thread(target=_run, daemon=True).start()
+
+    def _show_result(self, result: str, stats: Stats):
+        self._output.delete("1.0", "end")
+        self._output.insert("1.0", result)
+
+        self._stats_panel.update(stats)
+
+        self._toolbar.stop_scan()
+
+        if stats.total_changes > 0:
+            self._status_label.configure(
+                text=f"✓ {stats.total_changes} change(s) | -{stats.ratio}%",
+                fg=GREEN,
+            )
+        else:
+            self._status_label.configure(text="✓ No AI patterns found", fg=GREEN)
+
+        self._update_char_count()
+
+    def _clear_all(self):
+        self._input.delete("1.0", "end")
+        self._output.delete("1.0", "end")
+        self._stats_panel.update(Stats(bytes_before=0, bytes_after=0))
+        self._status_label.configure(text="Cleared", fg=TEXT_MUTED)
+        self._update_char_count()
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Canvas helper — rounded rectangles
+# ═══════════════════════════════════════════════════════════════════════════
+
+# Monkey-patch Canvas with rounded rect support
+_tk_create_rounded_rect = None
+
+def _canvas_rounded_rect(self, x1, y1, x2, y2, radius=25, **kwargs):
+    """Draw a rounded rectangle."""
+    points = [
+        x1 + radius, y1,
+        x2 - radius, y1,
+        x2 - radius, y1,
+        x2, y1,
+        x2, y1 + radius,
+        x2, y1 + radius,
+        x2, y2 - radius,
+        x2, y2 - radius,
+        x2, y2,
+        x2 - radius, y2,
+        x2 - radius, y2,
+        x1 + radius, y2,
+        x1 + radius, y2,
+        x1, y2,
+        x1, y2 - radius,
+        x1, y2 - radius,
+        x1, y1 + radius,
+        x1, y1 + radius,
+        x1, y1,
+    ]
+    return self.create_polygon(points, smooth=True, **kwargs)
+
+
+tk.Canvas.create_rounded_rect = _canvas_rounded_rect
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Launch
+# ═══════════════════════════════════════════════════════════════════════════
+
+def launch():
+    """Start the shoruiko desktop GUI."""
+    app = ShoruikoApp()
+    app.mainloop()
+
+
+if __name__ == "__main__":
+    launch()
