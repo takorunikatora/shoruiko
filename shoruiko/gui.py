@@ -517,7 +517,7 @@ class ShoruikoApp(tk.Tk):
         self.bind("<Control-2>", lambda e: self._toolbar._select_category("creator"))
         self.bind("<Control-3>", lambda e: self._toolbar._select_category("publisher"))
         self.bind("<Control-o>", lambda e: self._browse_file())
-        self.bind("<Control-v>", lambda e: self._paste_clipboard())  # Ctrl+V (no shift) when focused on root
+        self.bind("<Control-p>", lambda e: self._paste_clipboard())  # Ctrl+P = paste from clipboard into input
         self.bind("<Escape>", lambda e: self.destroy())
 
     def _build_ui(self):
