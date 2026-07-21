@@ -679,7 +679,115 @@ def shoruiko(text: str, mode: Mode | None = None) -> tuple[str, Stats]:
 
 
 def shoruiko_file(path: str, mode: Mode | None = None) -> tuple[str, Stats]:
-    """Process a single file."""
-    with open(path, "r", encoding="utf-8") as f:
-        text = f.read()
+    """Process a single file — auto-detects PDF/DOCX via extract_text()."""
+    text = extract_text(path)
     return shoruiko(text, mode)
+
+
+# ═══════════════════════════════════════════════════════════════════════════
+# Document text extraction
+# ═══════════════════════════════════════════════════════════════════════════
+
+def extract_text(path: str) -> str:
+    """Extract readable text from any supported document format.
+
+    Supports: .txt, .md, .rst, .html/.htm/.xhtml, .pdf, .docx, .adoc, .markdown.
+    """
+    ext = os.path.splitext(path)[1].lower()
+
+    if ext in (".pdf",):
+        return _extract_pdf(path)
+    elif ext in (".docx",):
+        return _extract_docx(path)
+    elif ext in (".html", ".htm", ".xhtml"):
+        return _extract_html(path)
+    else:
+        # Plain text: .txt, .md, .rst, .adoc, .markdown, etc.
+        with open(path, "r", encoding="utf-8", errors="replace") as f:
+            return f.read()
+
+
+def _extract_pdf(path: str) -> str:
+    """Extract text from a PDF file using PyPDF2."""
+    try:
+        from PyPDF2 import PdfReader
+    except ImportError:
+        raise ImportError(
+            "PyPDF2 is required to read PDF files. "
+            "Install it with: pip install PyPDF2"
+        )
+
+    reader = PdfReader(path)
+    pages: list[str] = []
+    for i, page in enumerate(reader.pages):
+        text = page.extract_text()
+        if text:
+            pages.append(text.strip())
+    return "\n\n".join(pages)
+
+
+def _extract_docx(path: str) -> str:
+    """Extract text from a DOCX file using python-docx."""
+    try:
+        from docx import Document
+    except ImportError:
+        raise ImportError(
+            "python-docx is required to read DOCX files. "
+            "Install it with: pip install python-docx"
+        )
+
+    doc = Document(path)
+    paragraphs: list[str] = []
+    for para in doc.paragraphs:
+        if para.text.strip():
+            paragraphs.append(para.text)
+    return "\n\n".join(paragraphs)
+
+
+def _extract_html(path: str) -> str:
+    """Extract readable text from an HTML file."""
+    import html.parser
+
+    class _HTMLTextExtractor(html.parser.HTMLParser):
+        def __init__(self):
+            super().__init__()
+            self._parts: list[str] = []
+            self._skip = False
+
+        def handle_starttag(self, tag, attrs):
+            if tag in ("script", "style", "noscript", "head"):
+                self._skip = True
+            elif tag in ("br", "p", "div", "li", "h1", "h2", "h3",
+                         "h4", "h5", "h6", "tr", "blockquote"):
+                self._parts.append("\n")
+
+        def handle_endtag(self, tag):
+            if tag in ("script", "style", "noscript", "head"):
+                self._skip = False
+            elif tag in ("p", "div", "li", "h1", "h2", "h3",
+                         "h4", "h5", "h6", "tr", "blockquote"):
+                self._parts.append("\n")
+
+        def handle_data(self, data):
+            if not self._skip:
+                text = data.strip()
+                if text:
+                    self._parts.append(text + " ")
+
+        def get_text(self) -> str:
+            raw = "".join(self._parts)
+            # Collapse multiple blank lines
+            lines = [line.strip() for line in raw.split("\n")
+                     if line.strip()]
+            return "\n\n".join(lines)
+
+    with open(path, "r", encoding="utf-8", errors="replace") as f:
+        html_text = f.read()
+
+    extractor = _HTMLTextExtractor()
+    extractor.feed(html_text)
+    return extractor.get_text()
+
+
+# Late import for os (avoid circular at module level; only used at runtime)
+import os
