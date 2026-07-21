@@ -704,6 +704,7 @@ class ShoruikoApp(tk.Tk):
     def _browse_file(self):
         path = filedialog.askopenfilename(
             title="Open document",
+            initialdir=os.path.expanduser("~"),
             filetypes=SUPPORTED_EXTENSIONS,
         )
         if not path:
